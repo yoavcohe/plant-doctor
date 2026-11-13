@@ -61,6 +61,21 @@ li{margin:3px 0}
 .hist .row:first-of-type{border-top:0}
 .hist small{color:var(--muted)}
 .fine{font-size:12.5px;color:var(--muted)}
+.ann{position:relative;border-radius:10px;overflow:hidden;border:1px solid var(--line)}
+.ann img{display:block;width:100%}
+.bx{position:absolute;border:2px solid var(--leaf);border-radius:6px;box-shadow:0 0 0 1px rgba(255,255,255,.7)}
+.pin{position:absolute;transform:translate(-50%,-50%);width:26px;height:26px;border-radius:50%;background:var(--leaf);color:var(--onleaf);font:700 13px/26px var(--body);text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.45)}
+.pin.sm{position:static;transform:none;display:inline-block;flex:none}
+.annots{display:flex;flex-direction:column;gap:10px;margin:12px 0}
+.legend{display:flex;flex-wrap:wrap;gap:8px}
+.legend button{background:var(--soft);color:var(--ink);padding:6px 12px 6px 8px;display:flex;gap:8px;align-items:center;font-size:14px}
+details.plant{padding:0;overflow:hidden}
+details.plant>summary{list-style:none;display:flex;gap:10px;align-items:center;padding:14px 16px;cursor:pointer;font:700 17px/1.3 var(--display)}
+details.plant>summary::-webkit-details-marker{display:none}
+details.plant>summary .nm{flex:1;min-width:0}
+details.plant>summary::after{content:'▾';color:var(--muted)}
+details.plant[open]>summary::after{content:'▴'}
+details.plant .body{padding:0 16px 16px}
 @media (max-width:400px){.fields{grid-template-columns:1fr}}
 </style>
 </head>
@@ -68,7 +83,7 @@ li{margin:3px 0}
 <main>
   <header>
     <h1>רופא הצמחים</h1>
-    <p class="sub">צלם את הצמח, או כמה תמונות מזוויות שונות, ותקבל מה הוא, מה נראה בעייתי ומה לעשות.</p>
+    <p class="sub">צלם צמח אחד או מדף שלם של צמחים, או כמה תמונות מזוויות שונות. תקבל זיהוי לכל צמח, מה נראה בעייתי ומה לעשות.</p>
   </header>
 
   <section class="card" aria-labelledby="ph">
@@ -81,7 +96,7 @@ li{margin:3px 0}
     <input id="fGal" type="file" accept="image/*" multiple hidden>
     <div id="thumbs" class="thumbs"></div>
     <p id="count" class="count"></p>
-    <p class="hint">תמונה אחת של הצמח כולו, ועוד תמונת קרוב של העלים הבעייתיים. מומלץ גם צד תחתון של עלה ואדמה.</p>
+    <p class="hint">אפשר לצלם כמה צמחים בתמונה אחת. לאבחון מדויק של צמח בעייתי, הוסף תמונת קרוב של העלים, צד תחתון של עלה ואדמה.</p>
   </section>
 
   <section class="card" aria-labelledby="ctx">
@@ -159,13 +174,18 @@ $('#thumbs').onclick=e=>{const b=e.target.closest('[data-rm]');if(!b)return;cons
 
 /* ---- analysis ---- */
 const SCHEMA=`{
- "plant": {"name_he": "שם נפוץ בעברית", "name_latin": "Genus species", "confidence": "high|medium|low|none", "alternatives": ["עד שני מועמדים נוספים אם לא בטוח"], "note": "משפט על הצמח ועל הוודאות בזיהוי"},
- "health": "good|warning|bad",
- "summary": "2-3 משפטים: מה המצב ומה הדבר החשוב ביותר לעשות",
- "urgent": "טקסט קצר אם יש משהו שדורש טיפול מיידי, אחרת null",
- "issues": [{"title": "שם הבעיה", "likelihood": "high|medium|low", "seen": "מה בתמונות תומך בזה", "causes": ["הסברים אפשריים לפי סבירות"], "check": "בדיקה פשוטה שמבדילה בין ההסברים", "fix": ["צעדי טיפול לפי סדר"]}],
- "care": {"light": "...", "water": "...", "soil": "...", "fertilizer": "...", "climate": "טמפרטורה ולחות"},
- "questions": ["עד 3 שאלות שיחדדו את האבחון"],
+ "overview": "משפט או שניים: מה יש בתמונות ומה המצב הכללי",
+ "plants": [{
+  "photo": 1,
+  "box": [0.1, 0.2, 0.4, 0.5],
+  "plant": {"name_he": "שם נפוץ בעברית", "name_latin": "Genus species", "confidence": "high|medium|low|none", "alternatives": ["עד שני מועמדים נוספים אם לא בטוח"], "note": "משפט על הצמח ועל הוודאות בזיהוי"},
+  "health": "good|warning|bad",
+  "summary": "1-2 משפטים: המצב והדבר החשוב ביותר לעשות",
+  "urgent": "טקסט קצר אם יש משהו שדורש טיפול מיידי, אחרת null",
+  "issues": [{"title": "שם הבעיה", "likelihood": "high|medium|low", "seen": "מה בתמונות תומך בזה", "causes": ["הסברים אפשריים לפי סבירות"], "check": "בדיקה פשוטה שמבדילה בין ההסברים", "fix": ["צעדי טיפול לפי סדר"]}],
+  "care": {"light": "...", "water": "...", "soil": "...", "fertilizer": "...", "climate": "..."},
+  "questions": ["עד 2 שאלות שיחדדו את האבחון"]
+ }],
  "photo_tips": "איזו תמונה נוספת תעזור, או null"
 }`;
 function buildPrompt(n){
@@ -173,15 +193,17 @@ function buildPrompt(n){
   if($('#light').value)ctx.push('מיקום: '+$('#light').value);
   if($('#water').value)ctx.push('תדירות השקיה: '+$('#water').value);
   if($('#note').value.trim())ctx.push('הערות המשתמש: '+$('#note').value.trim().slice(0,800));
-  return `You are an experienced horticulturist and plant pathologist. The user sent ${n} photo(s) of the same plant from different angles. Identify the plant and assess its health.
+  return `You are an experienced horticulturist and plant pathologist. The user sent ${n} photo(s), in order (photo 1 is the first). A photo may show one plant or several. The same plant may appear in more than one photo. Detect every distinct plant that is clear enough to assess, identify each one, and assess its health.
 
 Rules:
-- Base every claim on what is actually visible. Separate what you see from what you infer.
-- Be honest about uncertainty. Nutrient deficiency, overwatering, underwatering, low light, heat or cold stress, and pests often look alike in a photo. List the plausible causes in order of likelihood and give one simple check that tells them apart (for example: finger test of the soil moisture, look under the leaves for pests, check drainage holes and roots).
-- If the plant is healthy, say so plainly and return an empty issues array.
-- If the image is not a plant or is too unclear, set plant.confidence to "none" and use photo_tips to say what to photograph.
-- Give practical, low-risk treatment steps first. Mention pet or child toxicity in plant.note only when the plant is notably toxic.
-- Do not invent precise numbers or product names you cannot support.
+- Report each distinct plant once, in the plants array, ordered by importance (sick plants first). At most 8 plants; if there are more, report the 8 most visible and mention the rest in overview.
+- For each plant give "photo" (1-based index of the photo where it is clearest) and "box" as [left, top, width, height], each a fraction between 0 and 1 of that photo's width or height, tightly around the plant. The box is approximate. If you cannot place it, use null.
+- Base every claim on what is visible. Separate what you see from what you infer.
+- Be honest about uncertainty. Nutrient deficiency, overwatering, underwatering, low light, heat or cold stress, and pests often look alike in a photo. List plausible causes in order of likelihood and give one simple check that tells them apart.
+- If a plant looks healthy, say so and return an empty issues array for it.
+- With several plants, keep each plant short: at most 2 issues, at most 3 fix steps per issue. User notes may refer to one specific plant: apply them only where they fit.
+- If nothing is a plant, or the images are too unclear, return an empty plants array and use photo_tips to say what to photograph.
+- Mention pet or child toxicity in plant.note only when notably toxic. Do not invent precise numbers or product names you cannot support.
 - Write all values in Hebrew, short and concrete, except name_latin.
 
 User context: ${ctx.length?ctx.join(' | '):'none provided'}
@@ -201,11 +223,11 @@ async function analyze(){
   $('#out').innerHTML=`<section class="card spin"><i></i><span>מנתח ${photos.length} תמונות. זה לוקח בין חצי דקה לדקה.</span></section>`;
   try{
     const r=await sample(buildPrompt(photos.length),{images:photos.map(p=>p.blob),modelTier:'default',cache:false});
-    const d=parseJSON(r.text);
-    last=d;saveHist(d);renderResult(d);
+    let d;try{d=parseJSON(r.text)}catch(pe){throw Object.assign(new Error('parse'),{code:r&&r.truncated?'too_long':'parse'})}
+    last=d;saveHist(d);renderResult(d,photos.map(p=>URL.createObjectURL(p.blob)));
   }catch(e){
     const code=e&&e.code;
-    const msg=code==='not_granted'?'צריך לאשר ל-Claude לנתח את התמונות. לחץ שוב ואשר.':code==='rate_limited'?'יותר מדי בקשות בזמן קצר. נסה שוב בעוד דקה.':'הניתוח לא הצליח. נסה שוב, ואם זה חוזר, צלם תמונה חדה יותר.';
+    const msg=code==='not_granted'?'צריך לאשר ל-Claude לנתח את התמונות. לחץ שוב ואשר.':code==='rate_limited'?'יותר מדי בקשות בזמן קצר. נסה שוב בעוד דקה.':code==='too_long'?'התשובה ארוכה מדי כי יש הרבה צמחים. נסה לצלם פחות צמחים בכל תמונה, או לפצל לכמה תמונות ולנתח כל אחת בנפרד.':'הניתוח לא הצליח. נסה שוב, ואם זה חוזר, צלם תמונה חדה יותר.';
     $('#out').innerHTML=`<div class="err">${esc(msg)}</div>`;
   }finally{busy=false;refresh()}
 }
@@ -216,28 +238,47 @@ const H={good:['תקין','ok'],warning:['דורש תשומת לב','warn'],bad:
 const L={high:'סבירות גבוהה',medium:'סבירות בינונית',low:'סבירות נמוכה'};
 const C={high:'זיהוי בטוח',medium:'זיהוי סביר',low:'זיהוי לא בטוח',none:'לא זוהה'};
 const list=a=>Array.isArray(a)&&a.length?`<ul>${a.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:'';
-function renderResult(d){
-  const p=d.plant||{},h=H[d.health]||H.warning,care=d.care||{};
-  let o=`<section class="card spec"><h2>${esc(p.name_he||'צמח לא מזוהה')}</h2>${p.name_latin?`<div class="latin">${esc(p.name_latin)}</div>`:''}
-  <div class="chips"><span class="chip ${h[1]}">${h[0]}</span><span class="chip">${esc(C[p.confidence]||'')}</span></div>
-  ${p.alternatives&&p.alternatives.length?`<p class="hint">יכול להיות גם: ${p.alternatives.map(esc).join(', ')}</p>`:''}
-  <p>${esc(d.summary||'')}</p>${p.note?`<p class="hint">${esc(p.note)}</p>`:''}</section>`;
-  if(d.urgent)o+=`<div class="banner">${esc(d.urgent)}</div>`;
+const okBox=b=>Array.isArray(b)&&b.length===4&&b.every(v=>typeof v==='number'&&v>=0&&v<=1.001)&&b[2]>0.02&&b[3]>0.02;
+function annot(url,idx,ps){
+  const here=ps.map((p,i)=>({p,i})).filter(x=>Number(x.p.photo)===idx);
+  if(!here.length)return'';
+  return `<div class="ann"><img src="${url}" alt="תמונה ${idx} עם סימון הצמחים">`+here.map(({p,i},k)=>{
+    if(okBox(p.box)){const[b0,b1,b2,b3]=p.box;return `<i class="bx" style="left:${b0*100}%;top:${b1*100}%;width:${Math.min(b2,1-b0)*100}%;height:${Math.min(b3,1-b1)*100}%"></i><b class="pin" style="left:${Math.min(98,(b0+b2/2)*100)}%;top:${Math.min(96,(b1+b3/2)*100)}%">${i+1}</b>`}
+    return `<b class="pin" style="left:${6+k*8}%;top:8%">${i+1}</b>`}).join('')+`</div>`;
+}
+function plantBody(d){
+  const care=d.care||{};let o='';
+  if(d.summary)o+=`<p>${esc(d.summary)}</p>`;
+  const p=d.plant||{};
+  if(p.alternatives&&p.alternatives.length)o+=`<p class="hint">יכול להיות גם: ${p.alternatives.map(esc).join(', ')}</p>`;
+  if(p.note)o+=`<p class="hint">${esc(p.note)}</p>`;
+  if(d.urgent)o+=`<div class="banner" style="margin-top:10px">${esc(d.urgent)}</div>`;
   const is=Array.isArray(d.issues)?d.issues:[];
-  if(is.length)o+=`<section class="card"><h2>מה נראה לא תקין</h2>`+is.map(i=>`<div class="issue ${esc(i.likelihood)}"><h3>${esc(i.title)}<span class="chip ${i.likelihood==='high'?'bad':i.likelihood==='medium'?'warn':''}">${esc(L[i.likelihood]||'')}</span></h3>
-    ${i.seen?`<small>בתמונות: ${esc(i.seen)}</small>`:''}${list(i.causes)}${i.check?`<p style="margin-top:8px"><b>איך לבדוק:</b> ${esc(i.check)}</p>`:''}${i.fix&&i.fix.length?`<p style="margin-top:8px"><b>מה לעשות:</b></p><ol>${i.fix.map(x=>`<li>${esc(x)}</li>`).join('')}</ol>`:''}</div>`).join('')+`</section>`;
+  if(is.length)o+=is.map(i=>`<div class="issue ${esc(i.likelihood)}"><h3>${esc(i.title)}<span class="chip ${i.likelihood==='high'?'bad':i.likelihood==='medium'?'warn':''}">${esc(L[i.likelihood]||'')}</span></h3>
+    ${i.seen?`<small>בתמונות: ${esc(i.seen)}</small>`:''}${list(i.causes)}${i.check?`<p style="margin-top:8px"><b>איך לבדוק:</b> ${esc(i.check)}</p>`:''}${i.fix&&i.fix.length?`<p style="margin-top:8px"><b>מה לעשות:</b></p><ol>${i.fix.map(x=>`<li>${esc(x)}</li>`).join('')}</ol>`:''}</div>`).join('');
   const cr=[['אור',care.light],['השקיה',care.water],['אדמה',care.soil],['דישון',care.fertilizer],['אקלים',care.climate]].filter(x=>x[1]);
-  if(cr.length)o+=`<section class="card"><h2>טיפול שוטף</h2><div class="care">${cr.map(([k,v])=>`<div><b>${k}</b><span>${esc(v)}</span></div>`).join('')}</div></section>`;
-  const qs=Array.isArray(d.questions)?d.questions:[];
+  if(cr.length)o+=`<h2 style="margin-top:16px;font-size:16px">טיפול שוטף</h2><div class="care">${cr.map(([k,v])=>`<div><b>${k}</b><span>${esc(v)}</span></div>`).join('')}</div>`;
+  return o;
+}
+function renderResult(d,urls){
+  const ps=(Array.isArray(d.plants)?d.plants:[]).filter(x=>x&&typeof x==='object').slice(0,8);
+  if(!ps.length){$('#out').innerHTML=`<section class="card"><h2>לא זוהו צמחים</h2><p>${esc(d.overview||'לא הצלחתי לזהות צמח בתמונות.')}</p>${d.photo_tips?`<p class="hint">${esc(d.photo_tips)}</p>`:''}</section>`;return}
+  let o=`<section class="card spec"><h2>${ps.length===1?'זוהה צמח אחד':`זוהו ${ps.length} צמחים`}</h2>${d.overview?`<p>${esc(d.overview)}</p>`:''}
+  <div class="annots">${urls.map((u,i)=>annot(u,i+1,ps)).join('')}</div>
+  <div class="legend">${ps.map((x,i)=>{const h=H[x.health]||H.warning;return `<button type="button" data-go="${i}"><span class="pin sm">${i+1}</span>${esc((x.plant&&x.plant.name_he)||'צמח')} <span class="chip ${h[1]}">${h[0]}</span></button>`}).join('')}</div></section>`;
+  o+=ps.map((x,i)=>{const p=x.plant||{},h=H[x.health]||H.warning;
+    return `<details class="card plant" id="pl-${i}" ${ps.length===1||x.health!=='good'?'open':''}><summary><span class="pin sm">${i+1}</span><span class="nm">${esc(p.name_he||'צמח לא מזוהה')}${p.name_latin?`<br><span class="latin" style="font:italic 400 13px var(--body)">${esc(p.name_latin)}</span>`:''}</span><span class="chip ${h[1]}">${h[0]}</span><span class="chip">${esc(C[p.confidence]||'')}</span></summary><div class="body">${plantBody(x)}</div></details>`}).join('');
+  const qs=ps.flatMap((x,i)=>(Array.isArray(x.questions)?x.questions:[]).map(q=>(ps.length>1?`${i+1}. `:'')+q));
   if(qs.length||d.photo_tips)o+=`<section class="card"><h2>כדי לדייק את האבחון</h2>${list(qs)}${d.photo_tips?`<p style="margin-top:8px">${esc(d.photo_tips)}</p>`:''}<p class="hint">כתוב תשובות בשדה "מה אתה רואה" למעלה או הוסף תמונה, ולחץ שוב על "נתח".</p><button class="btn alt" type="button" id="again" style="margin-top:12px">חזור לפרטים</button></section>`;
   $('#out').innerHTML=o;
   const ag=$('#again');if(ag)ag.onclick=()=>{$('#note').focus();$('#note').scrollIntoView({behavior:'smooth',block:'center'})};
+  $('#out').querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>{const el=$('#pl-'+b.dataset.go);el.open=true;el.scrollIntoView({behavior:'smooth',block:'start'})});
   $('#out').scrollIntoView({behavior:'smooth',block:'start'});
 }
 
 /* ---- history (names only, no photos) ---- */
 function getHist(){try{return JSON.parse(localStorage.getItem('pd_hist'))||[]}catch(e){return[]}}
-function saveHist(d){try{const h=getHist();h.unshift({t:Date.now(),n:(d.plant&&d.plant.name_he)||'צמח לא מזוהה',s:d.health,x:String(d.summary||'').slice(0,140)});localStorage.setItem('pd_hist',JSON.stringify(h.slice(0,8)))}catch(e){}}
+function saveHist(d){try{const h=getHist(),ps=Array.isArray(d.plants)?d.plants:[];h.unshift({t:Date.now(),n:ps.map(x=>x&&x.plant&&x.plant.name_he).filter(Boolean).join(', ')||'לא זוהו צמחים',x:String(d.overview||(ps[0]&&ps[0].summary)||'').slice(0,140)});localStorage.setItem('pd_hist',JSON.stringify(h.slice(0,8)))}catch(e){}}
 function renderHist(){
   const h=getHist(),el=$('#hist');
   if(!h.length){el.hidden=true;return}
